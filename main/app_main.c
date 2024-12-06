@@ -40,6 +40,23 @@ static void log_error_if_nonzero(const char *message, int error_code)
     }
 }
 
+void periodic_publish_task(void *pvParameters) {
+    esp_mqtt_client_handle_t client = (esp_mqtt_client_handle_t)pvParameters;
+    char payload[16];
+
+    while (1) {
+
+        // int random_number = esp_random() % 100; 
+        snprintf(payload, sizeof(payload), "%d", 10);
+
+
+        int msg_id = esp_mqtt_client_publish(client, "iot", payload, 0, 1, 0);
+        ESP_LOGI(TAG, "Published random number: %s, msg_id=%d", payload, msg_id);
+
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+
 /*
  * @brief Event handler registered to receive MQTT events
  *
@@ -59,17 +76,23 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-        msg_id = esp_mqtt_client_publish(client, "/topic/qos0", "data_3", 0, 1, 0);
+        msg_id = esp_mqtt_client_publish(client, "iot", "data_3", 0, 1, 0);
         ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 
-        msg_id = esp_mqtt_client_subscribe(client, "/iot/qos0", 0);
+        msg_id = esp_mqtt_client_subscribe(client, "iot", 0);
         ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
-        msg_id = esp_mqtt_client_subscribe(client, "/topic/qos1", 1);
-        ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+        msg_id = esp_mqtt_client_publish(client, "iot", "hello blackmeo", sizeof("hello blackmeo"), 0, 0);
+        
+        xTaskCreate(periodic_publish_task, "periodic_publish_task",2*1024, client, 2, NULL);
 
-        msg_id = esp_mqtt_client_unsubscribe(client, "/topic/qos1");
-        ESP_LOGI(TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
+        // ESP_LOGI(TAG, "sent publish successful, len_msg = %d, msg_id = %d", sizeof("hello blackmeo"), msg_id);
+
+        // msg_id = esp_mqtt_client_subscribe(client, "/iot", 1);
+        // ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+
+        // msg_id = esp_mqtt_client_unsubscribe(client, "/iot");
+        // ESP_LOGI(TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -77,8 +100,10 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
     case MQTT_EVENT_SUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
-        msg_id = esp_mqtt_client_publish(client, "/iot/qos0", "hello blackmeo", 0, 0, 0);
-        ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+        msg_id = esp_mqtt_client_publish(client, "iot", "hello blackmeo", 0, 0, 0);
+        // ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+        ESP_LOGI(TAG, "sent publish successful, len_msg = %d, msg_id = %d", sizeof("hello blackmeo"), msg_id);
+
         break;
     case MQTT_EVENT_UNSUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
@@ -107,6 +132,9 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     }
 }
 
+
+
+
 static void mqtt_app_start(void)
 {
     esp_mqtt_client_config_t mqtt_cfg = {
@@ -116,6 +144,7 @@ static void mqtt_app_start(void)
         .credentials.username = "duchien",
         .credentials.authentication.password = "duchien",
         .session.keepalive = 60,
+        .session.protocol_ver = MQTT_PROTOCOL_V_5,
     };
 #if CONFIG_BROKER_URL_FROM_STDIN
     char line[128];
@@ -173,4 +202,10 @@ void app_main(void)
     ESP_ERROR_CHECK(example_connect());
 
     mqtt_app_start();
+
+    while(1)
+    {
+        // esp_mqtt_client_publish(client, "iot", "hello blackmeo", 0, 0, 0);
+
+    }
 }
